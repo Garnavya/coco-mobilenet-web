@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Capacity Bottleneck Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; }
+        .metric-card { opacity: 0; transform: translateY(20px); }
+    </style>
+</head>
+<body class="min-h-screen p-8 font-sans">
+
+    <header class="max-w-6xl mx-auto mb-12 header-anim opacity-0">
+        <h1 class="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400 mb-2">
+            The Capacity Bottleneck
+        </h1>
+        <p class="text-slate-400 text-lg">Monolithic vs. Modular Multi-Task Learning on Edge Hardware (8GB VRAM)</p>
+    </header>
+
+    <!-- 1. ABSTRACT & HYPOTHESIS -->
+    <section class="max-w-6xl mx-auto bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-lg mb-8 content-section translate-y-4 opacity-0">
+        <h2 class="text-2xl font-bold text-white mb-4 border-b border-slate-700 pb-2">Abstract & Core Hypothesis</h2>
+        <p class="text-slate-300 leading-relaxed mb-4">
+            Modern artificial intelligence relies on massive parameter counts, but consumer-grade edge devices (smartphones, IoT) are severely hardware-constrained. To deploy multi-modal AI on the edge, developers typically choose between forcing multiple tasks through a single lightweight backbone (<strong>Monolithic</strong>) or sequentially loading task-specific micro-models (<strong>Modular</strong>).
+        </p>
+        <p class="text-slate-300 leading-relaxed font-medium bg-slate-900 p-4 rounded-lg border-l-4 border-blue-500">
+            <span class="text-blue-400 font-bold">Hypothesis:</span> Forcing radically different computational tasks—dense spatial geometry (bounding boxes and keypoints) and autoregressive natural language processing—through a strictly constrained 5.4-million parameter network creates a mathematical capacity bottleneck, heavily favoring decoupled micro-model pipelines.
+        </p>
+    </section>
+
+    <!-- 2. METHODOLOGY & CONSTRAINTS -->
+    <section class="max-w-6xl mx-auto bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-lg mb-12 content-section translate-y-4 opacity-0">
+        <h2 class="text-2xl font-bold text-white mb-4 border-b border-slate-700 pb-2">Methodology: The Edge AI Stress Test</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mt-6">
+            <div>
+                <h3 class="text-lg font-bold text-emerald-400 mb-2">Hardware Ceilings</h3>
+                <ul class="list-disc list-inside text-slate-300 space-y-3">
+                    <li><strong>GPU Constraint:</strong> Execution bounded by an RTX 5050 (8GB VRAM limit).</li>
+                    <li><strong>Batch & Resolution:</strong> VRAM ceilings forced the Monolithic model (Track A) to standardize on a 256x256 global resolution at a batch size of 64 to prevent CUDA Out-Of-Memory errors.</li>
+                    <li><strong>Backbone limit:</strong> MobileNetV3 (5.4 million parameters) acts as the unified feature extractor.</li>
+                </ul>
+            </div>
+            <div>
+                <h3 class="text-lg font-bold text-rose-400 mb-2">Dataset Starvation</h3>
+                <ul class="list-disc list-inside text-slate-300 space-y-3">
+                    <li><strong>Modular Advantage:</strong> Track B trained independently on full domain-specific COCO datasets (118k+ detection images, 591k+ captions).</li>
+                    <li><strong>Monolithic Penalty:</strong> Track A required strict triple-annotation overlap (images containing boxes AND keypoints AND captions simultaneously).</li>
+                    <li><strong>The Bottleneck:</strong> The monolithic dataset was mathematically restricted to just <strong>56,599</strong> usable multi-task images.</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. GRADIENT DOMINATION & MULTI-TASK LOSS -->
+    <section class="max-w-6xl mx-auto bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-lg mb-12 content-section translate-y-4 opacity-0">
+        <h2 class="text-2xl font-bold text-white mb-4 border-b border-slate-700 pb-2">Combating Gradient Domination</h2>
+        <p class="text-slate-300 leading-relaxed mb-6">
+            In monolithic architectures, computing disparate tasks simultaneously introduces severe gradient conflicts. Image captioning relies on Cross-Entropy (CE) loss across a 10,000+ word dictionary, naturally producing high scalar values. Conversely, object detection and pose estimation rely on Mean Squared Error (MSE) for spatial coordinates, outputting tiny fractional percentages.
+        </p>
+        
+        <div class="bg-slate-900 p-6 rounded-lg border border-slate-700 flex flex-col md:flex-row items-center justify-between gap-8">
+            <div class="flex-1">
+                <h3 class="text-lg font-bold text-purple-400 mb-2">The Weighting Formula</h3>
+                <p class="text-slate-400 text-sm mb-4">Without manual intervention, the massive NLP gradients completely drown out the spatial geometry math, causing the backbone to become "blind" to physical structures. A static multiplier was applied to mathematically inflate the spatial constraints:</p>
+                
+                <!-- Math Formula -->
+                <div class="text-center text-lg md:text-xl font-mono text-emerald-300 bg-slate-800 py-4 rounded border border-slate-600 shadow-inner">
+                    L<sub>total</sub> = (50 × L<sub>box</sub>) + (50 × L<sub>pose</sub>) + (1 × L<sub>cap</sub>)
+                </div>
+            </div>
+            
+            <div class="flex-1 bg-slate-800 p-5 rounded-lg border border-slate-600 w-full shadow-inner">
+                <h4 class="text-sm font-bold text-white mb-3 border-b border-slate-700 pb-2">Epoch 1 Baseline Imbalance</h4>
+                <ul class="text-sm font-mono text-slate-300 space-y-3">
+                    <li class="flex justify-between items-center">
+                        <span class="text-blue-400">Box (MSE)</span> 
+                        <span class="bg-slate-900 px-2 py-1 rounded">0.0588</span>
+                    </li>
+                    <li class="flex justify-between items-center">
+                        <span class="text-blue-400">Pose (MSE)</span> 
+                        <span class="bg-slate-900 px-2 py-1 rounded">0.1437</span>
+                    </li>
+                    <li class="flex justify-between items-center">
+                        <span class="text-pink-400">Caption (CE)</span> 
+                        <span class="bg-slate-900 px-2 py-1 rounded text-pink-300 font-bold border border-pink-900">9.1600 (Dominant)</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. EPOCH CONVERGENCE ANALYSIS -->
+    <section class="max-w-6xl mx-auto bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-lg mb-12 content-section translate-y-4 opacity-0">
+        <h2 class="text-2xl font-bold text-white mb-4 border-b border-slate-700 pb-2">Epoch Convergence & The Bottleneck Limit</h2>
+        <p class="text-slate-300 leading-relaxed mb-6">
+            Training was deliberately halted at Epoch 20 to prevent catastrophic language overfitting while observing the physical limits of the shared architecture. The convergence logs expose the exact moment the 5.4 million parameters reached their cognitive capacity.
+        </p>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-slate-900 p-5 rounded-lg border border-slate-700 border-b-4 border-b-emarald-500 shadow-[0_4px_15px_-3px_rgba(244,63,94,0.3)]">
+                <h3 class="text-lg font-bold text-emerald-400 mb-2">Box: Geometric Plateau</h3>
+                <div class="text-3xl font-mono text-white mb-2">0.0028</div>
+                <p class="text-sm text-slate-400">By Epoch 18, bounding box MSE flatlined. The backbone dedicated enough parameters to find the overall subject but refused to refine further, successfully resolving basic spatial geometry.</p>
+            </div>
+            
+            <div class="bg-slate-900 p-5 rounded-lg border border-slate-700 border-b-4 border-b-rose-500 shadow-[0_4px_15px_-3px_rgba(244,63,94,0.3)]">
+                <h3 class="text-lg font-bold text-rose-400 mb-2">Pose: The Bottleneck</h3>
+                <div class="text-3xl font-mono text-white mb-2">0.0231</div>
+                <p class="text-sm text-slate-400">The smoking gun. Pose MSE stalled in the 0.02 range, failing to hit the 0.01 target. The network lacked the residual capacity to resolve 17 complex human joints across a 256x256 global feature map.</p>
+            </div>
+            
+            <div class="bg-slate-900 p-5 rounded-lg border border-slate-700 border-b-4 border-b-pink-500">
+                <h3 class="text-lg font-bold text-pink-400 mb-2">Caption: Overfit Threshold</h3>
+                <div class="text-3xl font-mono text-white mb-2">0.8340</div>
+                <p class="text-sm text-slate-400">Cross-Entropy loss dropped rapidly. Halting at 0.8340 preserved semantic generalization; continuing would have forced the model to memorize the dataset verbatim, destroying real-world inference capability.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. QUALITATIVE FAILURE CASES (VISUAL EVIDENCE) -->
+    <section class="max-w-6xl mx-auto bg-slate-800 p-8 rounded-xl border border-slate-700 shadow-lg mb-12 content-section translate-y-4 opacity-0">
+        <h2 class="text-2xl font-bold text-white mb-4 border-b border-slate-700 pb-2">Visual Evidence: The Bottleneck in Action</h2>
+        <p class="text-slate-300 leading-relaxed mb-6">
+            The statistical collapse observed in the metrics translates directly to real-world inference failures. While the Monolithic architecture successfully maps global bounding boxes, it mathematically regresses the complex skeletal keypoints toward the center of the bounding box mass, entirely failing to track articulated limbs.
+        </p>
+        
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Track A Visual -->
+            <div class="bg-slate-900 rounded-lg border border-rose-900/50 overflow-hidden shadow-inner">
+                <div class="bg-rose-950/30 p-3 border-b border-rose-900/50 flex justify-between items-center">
+                    <span class="font-bold text-rose-400">Track A: Monolithic Output</span>
+                    <span class="text-xs font-mono bg-rose-900/50 text-rose-300 px-2 py-1 rounded">Homogeneous 256x256</span>
+                </div>
+                <!-- Placeholder for Track A Image -->
+                <div class="aspect-video bg-slate-800 flex items-center justify-center relative overflow-hidden group">
+                    <div class="absolute inset-0 bg-[url('track_a_sample.jpg')] bg-cover bg-center opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                    <span class="text-slate-500 font-mono text-sm z-10">[Insert Track A Output Image]</span>
+                </div>
+                <div class="p-4 bg-slate-900">
+                    <p class="text-sm text-slate-400 mb-2"><strong class="text-rose-400">Box:</strong> Spot on.</p>
+                    <p class="text-sm text-slate-400 mb-2"><strong class="text-rose-400">Pose:</strong> Clustered uselessly at the center of mass.</p>
+                    <p class="text-sm font-mono text-slate-300 bg-slate-800 p-2 rounded">Caption: "a man is standing in a room"</p>
+                </div>
+            </div>
+            
+            <!-- Track B Visual -->
+            <div class="bg-slate-900 rounded-lg border border-emerald-900/50 overflow-hidden shadow-inner">
+                <div class="bg-emerald-950/30 p-3 border-b border-emerald-900/50 flex justify-between items-center">
+                    <span class="font-bold text-emerald-400">Track B: Modular Output</span>
+                    <span class="text-xs font-mono bg-emerald-900/50 text-emerald-300 px-2 py-1 rounded">Heterogeneous Crop</span>
+                </div>
+                <!-- Placeholder for Track B Image -->
+                <div class="aspect-video bg-slate-800 flex items-center justify-center relative overflow-hidden group">
+                    <div class="absolute inset-0 bg-[url('track_b_sample.jpg')] bg-cover bg-center opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                    <span class="text-slate-500 font-mono text-sm z-10">[Insert Track B Output Image]</span>
+                </div>
+                <div class="p-4 bg-slate-900">
+                    <p class="text-sm text-slate-400 mb-2"><strong class="text-emerald-400">Box:</strong> Precise (320x320 native).</p>
+                    <p class="text-sm text-slate-400 mb-2"><strong class="text-emerald-400">Pose:</strong> Accurately tracks articulated limbs via zoomed crop.</p>
+                    <p class="text-sm font-mono text-slate-300 bg-slate-800 p-2 rounded">Caption: "a man riding a skateboard down a street"</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <main class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
+        
+        <!-- Interactive Chart Section -->
+        <div class="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700 chart-anim opacity-0">
+            <h2 class="text-xl font-semibold mb-6">Performance Degradation (Normalized %)</h2>
+            <canvas id="comparisonChart" width="400" height="250"></canvas>
+            <p class="text-xs text-slate-400 mt-4">*NLP metrics (CIDEr/BLEU-4) scaled to 0-100 for visual comparison.</p>
+        </div>
+
+        <!-- Metrics Explanations Section -->
+        <div class="space-y-4">
+            
+            <div class="metric-card bg-slate-800 p-5 rounded-xl border border-slate-700 border-l-4 border-l-blue-500">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-lg font-bold text-blue-400">mAP @ 0.50:0.95</h3>
+                    <span class="text-xs font-mono bg-slate-700 px-2 py-1 rounded">Object Detection</span>
+                </div>
+                <p class="text-sm text-slate-300">Calculates how tightly the predicted bounding box overlaps the ground truth across multiple thresholds. It normalizes pixel errors so large and small objects are judged fairly.</p>
+            </div>
+
+            <div class="metric-card bg-slate-800 p-5 rounded-xl border border-slate-700 border-l-4 border-l-emerald-500">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-lg font-bold text-emerald-400">OKS (Object Keypoint Similarity)</h3>
+                    <span class="text-xs font-mono bg-slate-700 px-2 py-1 rounded">Pose Estimation</span>
+                </div>
+                <p class="text-sm text-slate-300">Measures the distance between predicted and actual joints, scaling the penalty based on the person's size in the frame to account for perspective.</p>
+            </div>
+
+            <div class="metric-card bg-slate-800 p-5 rounded-xl border border-slate-700 border-l-4 border-l-purple-500">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-lg font-bold text-purple-400">CIDEr</h3>
+                    <span class="text-xs font-mono bg-slate-700 px-2 py-1 rounded">Semantic Value</span>
+                </div>
+                <p class="text-sm text-slate-300">Uses TF-IDF to reward the model for generating highly descriptive, unique vocabulary rather than relying on generic, safe filler words.</p>
+            </div>
+
+            <div class="metric-card bg-slate-800 p-5 rounded-xl border border-slate-700 border-l-4 border-l-pink-500">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-lg font-bold text-pink-400">BLEU-4</h3>
+                    <span class="text-xs font-mono bg-slate-700 px-2 py-1 rounded">Grammatical Fluency</span>
+                </div>
+                <p class="text-sm text-slate-300">Counts how many 4-word sequences (n-grams) exactly match human-written captions, ensuring structural syntax and grammar remain intact.</p>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // 1. Chart.js Initialization
+        const ctx = document.getElementById('comparisonChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['mAP (Detection)', 'OKS (Pose)', 'CIDEr (Semantics)', 'BLEU-4 (Syntax)'],
+                datasets: [
+                    {
+                        label: 'Track A (Monolithic)',
+                        data: [3.7, 0.1, 46.2, 18.6],
+                        backgroundColor: 'rgba(244, 63, 94, 0.8)', // Rose-500
+                        borderColor: 'rgba(244, 63, 94, 1)',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    },
+                    {
+                        label: 'Track B (Modular)',
+                        data: [22.0, 45.0, 76.5, 24.2],
+                        backgroundColor: 'rgba(16, 185, 129, 0.8)', // Emerald-500
+                        borderColor: 'rgba(16, 185, 129, 1)',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { labels: { color: '#cbd5e1' } },
+                    tooltip: { mode: 'index', intersect: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(51, 65, 85, 0.5)' },
+                        ticks: { color: '#94a3b8' }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#94a3b8' }
+                    }
+                }
+            }
+        });
+
+        // 2. GSAP Entrance Animations
+        gsap.to(".header-anim", { opacity: 1, y: 0, duration: 1, ease: "power3.out" });
+        gsap.to(".chart-anim", { opacity: 1, y: 0, duration: 1, delay: 0.2, ease: "power3.out" });
+        
+        // Stagger the metric cards
+        gsap.to(".metric-card", {
+            opacity: 1,
+            y: 0,
+            duration: 0.8,
+            stagger: 0.15,
+            delay: 0.4,
+            ease: "back.out(1.2)"
+        });
+
+        // 3. Document Sections Animations
+        gsap.to(".content-section", {
+            opacity: 1,
+            y: 0,
+            duration: 0.8,
+            stagger: 0.2,
+            delay: 0.1,
+            ease: "power3.out"
+        });
+    </script>
+</body>
+</html>

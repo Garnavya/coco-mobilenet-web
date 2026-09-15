@@ -2,6 +2,52 @@
 __pycache__/
 data/
 models/
+reports/
 *.pth
 *.onnx
 *.bin
+
+
+# -----------------------------
+# 1. Python & Environments
+# -----------------------------
+__pycache__/
+*.py[cod]
+*venv*/
+.env
+
+# -----------------------------
+# 2. PyTorch Weights (CRITICAL)
+# -----------------------------
+# Never commit model weights directly to Git. 
+# They belong in GitHub Releases or Hugging Face.
+*.pth
+*.pt
+*.ckpt
+
+# Ignore the heavy training output folders
+reports/run_mono_*/
+reports/run_pose_*/
+reports/run_caption_*/
+
+# -----------------------------
+# 3. Datasets & Media
+# -----------------------------
+# Ignore the 56k+ COCO images
+/data/
+*.zip
+*.tar.gz
+
+# Ignore all images EXCEPT the two specific samples needed for the HTML UI
+*.jpg
+*.png
+!track_a_sample.jpg
+!track_b_sample.jpg
+
+# -----------------------------
+# 4. OS & IDE Files
+# -----------------------------
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
