@@ -23,7 +23,6 @@ Testing on consumer-grade hardware (8GB VRAM max) demonstrated that the monolith
 | **Image Captioning (CIDEr)** | 0.462 | 0.765 | **-39.6%** |
 | **Image Captioning (BLEU-4)** | 0.186 | 0.242 | **-23.1%** |
 
-*Read the full findings in our [Interactive Web Dashboard](https://garnavya.github.io/capacity-bottleneck/) (Ensure you link your GitHub Pages URL here once live).*
 
 ## ⚙️ Architecture details
 
