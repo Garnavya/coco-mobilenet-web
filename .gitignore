@@ -51,3 +51,4 @@ reports/run_caption_*/
 Thumbs.db
 .vscode/
 .idea/
+.gradio/
