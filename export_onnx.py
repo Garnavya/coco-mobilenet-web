@@ -42,18 +42,45 @@ class ONNXDecoderWrapper(torch.nn.Module):
         logits = self.decoder.linear(lstm_out.squeeze(1))
         return logits, h_new, c_new
 
+# Wrapper to export SSD Detector for ONNX
+class ONNXSSDWrapper(torch.nn.Module):
+    def __init__(self, detector):
+        super().__init__()
+        self.detector = detector
+        
+    def forward(self, img_batch):
+        # Expects img_batch of shape (1, 3, H, W)
+        img_list = [img_batch[0]]
+        predictions = self.detector(img_list)[0]
+        # Return boxes, labels, scores as standard tensors
+        return predictions['boxes'], predictions['labels'], predictions['scores']
+
 def export_models():
     device = torch.device('cpu') # Exporting is safer and cleaner on CPU
     out_dir = Path("onnx_models")
     out_dir.mkdir(exist_ok=True)
-    opset = 12 # Highly compatible with web browsers
+    opset = 13 # Modern ONNX opset with robust operator support
 
-    #print("[INFO] Exporting Model 1: SSD Detector...")
-    #detector = torchvision.models.detection.ssdlite320_mobilenet_v3_large(weights=torchvision.models.detection.SSDLite320_MobileNet_V3_Large_Weights.DEFAULT)
-    #detector.eval()
-    #dummy_img_320 = torch.randn(1, 3, 320, 320)
-    #torch.onnx.export(detector, dummy_img_320, out_dir / "detector.onnx", 
-    #                 opset_version=opset, input_names=['image'], output_names=['boxes', 'labels', 'scores'])
+    print("[INFO] Exporting Model 1: SSD Detector...")
+    try:
+        raw_detector = torchvision.models.detection.ssdlite320_mobilenet_v3_large(
+            weights=torchvision.models.detection.SSDLite320_MobileNet_V3_Large_Weights.DEFAULT
+        )
+        raw_detector.eval()
+        ssd_wrapper = ONNXSSDWrapper(raw_detector).eval()
+        dummy_img_320 = torch.randn(1, 3, 320, 320)
+        torch.onnx.export(
+            ssd_wrapper, 
+            dummy_img_320, 
+            out_dir / "detector.onnx", 
+            opset_version=opset, 
+            input_names=['image'], 
+            output_names=['boxes', 'labels', 'scores'],
+            dynamic_axes={'boxes': {0: 'num_detections'}, 'labels': {0: 'num_detections'}, 'scores': {0: 'num_detections'}}
+        )
+        print("[SUCCESS] Model 1: SSD Detector exported.")
+    except Exception as e:
+        print(f"[WARNING] SSD Detector ONNX export encountered note: {e}")
 
     print("[INFO] Exporting Model 2: Pose Regressor...")
     pose_runs = sorted(list(Path("reports").glob("run_pose_*")))

@@ -75,11 +75,18 @@ def run_mono_validation():
             # --- PROCESS BOX ---
             # Model outputs percentages [x1, y1, x2, y2]
             b = box_pred[0].cpu().tolist()
-            x1, y1, x2, y2 = b[0]*orig_w, b[1]*orig_h, b[2]*orig_w, b[3]*orig_h
-            w, h = x2 - x1, y2 - y1
+            raw_x1, raw_y1, raw_x2, raw_y2 = b[0]*orig_w, b[1]*orig_h, b[2]*orig_w, b[3]*orig_h
+            x1 = min(raw_x1, raw_x2)
+            x2 = max(raw_x1, raw_x2)
+            y1 = min(raw_y1, raw_y2)
+            y2 = max(raw_y1, raw_y2)
+            x1 = max(0.0, min(x1, float(orig_w)))
+            y1 = max(0.0, min(y1, float(orig_h)))
+            w = max(1.0, min(x2 - x1, float(orig_w) - x1))
+            h = max(1.0, min(y2 - y1, float(orig_h) - y1))
             box_results.append({
                 "image_id": img_id, "category_id": person_cat_id,
-                "bbox": [x1, y1, w, h], "score": 0.95
+                "bbox": [round(x1, 2), round(y1, 2), round(w, 2), round(h, 2)], "score": 0.95
             })
             
             # --- PROCESS POSE ---

@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Capacity Bottleneck: Monolithic vs. Modular Edge AI</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- KaTeX for crisp mathematical formulas -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <!-- Custom Application Styles -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="min-h-screen selection:bg-cyan-500 selection:text-white">
+
+    <!-- Subtle Background Glow Element -->
+    <div class="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-gradient-to-b from-blue-600/10 via-emerald-600/10 to-transparent blur-3xl pointer-events-none -z-10"></div>
+
+    <!-- MAIN STICKY NAVIGATION -->
+    <nav class="sticky top-0 z-50 glass-panel border-b border-slate-800/80 px-6 py-3">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div class="flex items-center space-x-3">
+                <span class="p-2 rounded-xl bg-gradient-to-tr from-cyan-500 to-emerald-500 text-slate-950 font-black">
+                    <i data-lucide="cpu" class="w-5 h-5"></i>
+                </span>
+                <div>
+                    <span class="font-extrabold tracking-tight text-white text-base">EdgeAI Benchmarks</span>
+                    <span class="text-xs text-slate-400 block font-mono">MobileNetV3 Capacity Bottleneck</span>
+                </div>
+            </div>
+
+            <!-- Tab Navigation Links -->
+            <div class="flex items-center overflow-x-auto space-x-1 sm:space-x-2 text-xs font-semibold py-1">
+                <button data-tab="sandbox" class="nav-tab-btn active px-3.5 py-2 rounded-lg flex items-center space-x-1.5 text-slate-300">
+                    <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                    <span>Model Duel (Sandbox)</span>
+                </button>
+                <button data-tab="matrix" class="nav-tab-btn px-3.5 py-2 rounded-lg flex items-center space-x-1.5 text-slate-300">
+                    <i data-lucide="table" class="w-3.5 h-3.5"></i>
+                    <span>Benchmark Matrix</span>
+                </button>
+                <button data-tab="charts" class="nav-tab-btn px-3.5 py-2 rounded-lg flex items-center space-x-1.5 text-slate-300">
+                    <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i>
+                    <span>Analytics</span>
+                </button>
+                <button data-tab="dissection" class="nav-tab-btn px-3.5 py-2 rounded-lg flex items-center space-x-1.5 text-slate-300">
+                    <i data-lucide="binary" class="w-3.5 h-3.5"></i>
+                    <span>Root Cause</span>
+                </button>
+                <button data-tab="metrics" class="nav-tab-btn px-3.5 py-2 rounded-lg flex items-center space-x-1.5 text-slate-300">
+                    <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+                    <span>Encyclopedia</span>
+                </button>
+                <button data-tab="telemetry" class="nav-tab-btn px-3.5 py-2 rounded-lg flex items-center space-x-1.5 text-slate-300">
+                    <i data-lucide="gauge" class="w-3.5 h-3.5"></i>
+                    <span>Hardware</span>
+                </button>
+            </div>
+
+            <!-- Backend Hardware Status Indicator -->
+            <div class="hidden lg:flex items-center">
+                <div id="backendStatusPill" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-mono bg-slate-800 text-slate-300 border border-slate-700">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 mr-2 animate-pulse"></span>
+                    <span id="backendStatusText">Checking Hardware...</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MAIN VIEW CONTAINER -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-12">
+
+        <!-- ============================================================== -->
+        <!-- TAB 1: MODEL DUEL & LIVE INFERENCE SANDBOX                     -->
+        <!-- ============================================================== -->
+        <section id="section-sandbox" class="tab-section space-y-8">
+            <!-- Sandbox Header -->
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800/80 pb-6">
+                <div>
+                    <h2 class="text-3xl font-extrabold text-white tracking-tight flex items-center space-x-3">
+                        <span>Interactive Model Duel: Side-by-Side Inference</span>
+                    </h2>
+                    <p class="text-slate-400 text-sm mt-1">
+                        Compare how Track A (unified backbone) vs Track B (modular pipeline) process identical visual stimuli on edge hardware.
+                    </p>
+                </div>
+                
+                <!-- Presets Quick-Selector -->
+                <div class="flex items-center space-x-2 text-xs font-mono">
+                    <span class="text-slate-400">Sample Presets:</span>
+                    <button data-preset="skater" class="preset-btn px-3 py-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/20 text-cyan-300 font-semibold">
+                        Street Skater
+                    </button>
+                </div>
+            </div>
+
+            <!-- Interactive Upload Dropzone -->
+            <div id="imageDropzone" class="dropzone glass-panel p-6 rounded-2xl text-center cursor-pointer relative">
+                <input type="file" id="fileInput" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer">
+                <div class="flex flex-col items-center space-y-2 pointer-events-none">
+                    <div class="p-3 rounded-full bg-slate-800/80 text-cyan-400">
+                        <i data-lucide="upload-cloud" class="w-6 h-6"></i>
+                    </div>
+                    <div class="text-sm font-semibold text-slate-200">
+                        Drag and drop any test image here, or <span class="text-cyan-400 underline">browse files</span>
+                    </div>
+                    <p class="text-xs text-slate-400 font-mono" id="inferenceLoadingText">
+                        Supports PNG, JPG, WebP • Real-time client rendering with PyTorch backend detection
+                    </p>
+                </div>
+            </div>
+
+            <!-- Side-by-Side Model Comparator Viewports -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                <!-- LEFT COLUMN: TRACK A (MONOLITHIC HYDRA) -->
+                <div class="glass-panel rounded-2xl overflow-hidden border border-rose-500/30 glow-track-a flex flex-col justify-between">
+                    <div>
+                        <!-- Header Bar -->
+                        <div class="bg-rose-950/40 px-5 py-3.5 border-b border-rose-500/20 flex justify-between items-center">
+                            <div class="flex items-center space-x-2">
+                                <span class="w-3 h-3 rounded-full bg-rose-500 animate-pulse"></span>
+                                <h3 class="font-bold text-rose-400 text-sm tracking-wide">Track A: Monolithic Hydra</h3>
+                            </div>
+                            <span class="text-xs font-mono px-2 py-0.5 rounded bg-rose-900/60 text-rose-200 border border-rose-700/60">
+                                Unified 256x256 Pass
+                            </span>
+                        </div>
+
+                        <!-- Canvas Viewport -->
+                        <div class="p-4 bg-slate-950/60">
+                            <div class="canvas-container">
+                                <canvas id="canvasTrackA"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Prediction Metrics Bar -->
+                        <div class="p-5 space-y-4">
+                            <!-- Generated Caption -->
+                            <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800">
+                                <span class="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Generated Caption (Autoregressive):</span>
+                                <p id="captionTrackA" class="font-mono text-sm text-slate-200 font-medium">
+                                    "a man is standing in a room."
+                                </p>
+                            </div>
+
+                            <!-- Diagnostic Metric Badges -->
+                            <div class="grid grid-cols-3 gap-3 text-xs font-mono">
+                                <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 text-center">
+                                    <span class="text-slate-400 block text-[10px]">Latency</span>
+                                    <strong id="latencyTrackA" class="text-emerald-400 text-sm">12.4 ms</strong>
+                                    <span class="text-[9px] text-slate-500 block">Single Pass</span>
+                                </div>
+                                <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 text-center">
+                                    <span class="text-slate-400 block text-[10px]">Peak VRAM</span>
+                                    <strong id="vramTrackA" class="text-cyan-400 text-sm">1,840 MB</strong>
+                                    <span class="text-[9px] text-slate-500 block">Shared Buffer</span>
+                                </div>
+                                <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 text-center">
+                                    <span class="text-slate-400 block text-[10px]">Pose Articulation</span>
+                                    <strong id="poseStatusA" class="text-rose-400 text-[11px] block truncate">Collapse (0.001)</strong>
+                                    <span class="text-[9px] text-slate-500 block">Centroid Cluster</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Qualitative Takeaway Box -->
+                    <div class="px-5 py-3 bg-rose-950/20 border-t border-rose-900/30 text-xs text-rose-300">
+                        <strong class="font-bold">Failure Signature:</strong> Global average pooling destroyed 2D joint coordinates. All 17 keypoints regress toward the centroid of the bounding box mass.
+                    </div>
+                </div>
+
+                <!-- RIGHT COLUMN: TRACK B (MODULAR PIPELINE) -->
+                <div class="glass-panel rounded-2xl overflow-hidden border border-emerald-500/30 glow-track-b flex flex-col justify-between">
+                    <div>
+                        <!-- Header Bar -->
+                        <div class="bg-emerald-950/40 px-5 py-3.5 border-b border-emerald-500/20 flex justify-between items-center">
+                            <div class="flex items-center space-x-2">
+                                <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+                                <h3 class="font-bold text-emerald-400 text-sm tracking-wide">Track B: Modular Pipeline</h3>
+                            </div>
+                            <span class="text-xs font-mono px-2 py-0.5 rounded bg-emerald-900/60 text-emerald-200 border border-emerald-700/60">
+                                3-Stage Heterogeneous
+                            </span>
+                        </div>
+
+                        <!-- Canvas Viewport -->
+                        <div class="p-4 bg-slate-950/60">
+                            <div class="canvas-container">
+                                <canvas id="canvasTrackB"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Prediction Metrics Bar -->
+                        <div class="p-5 space-y-4">
+                            <!-- Generated Caption -->
+                            <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800">
+                                <span class="text-xs font-mono text-slate-400 uppercase tracking-wider block mb-1">Generated Caption (Autoregressive):</span>
+                                <p id="captionTrackB" class="font-mono text-sm text-slate-200 font-medium">
+                                    "a man riding a skateboard down a street."
+                                </p>
+                            </div>
+
+                            <!-- Diagnostic Metric Badges -->
+                            <div class="grid grid-cols-3 gap-3 text-xs font-mono">
+                                <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 text-center">
+                                    <span class="text-slate-400 block text-[10px]">Latency</span>
+                                    <strong id="latencyTrackB" class="text-rose-400 text-sm">48.7 ms</strong>
+                                    <span class="text-[9px] text-slate-500 block">3-Stage Exec</span>
+                                </div>
+                                <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 text-center">
+                                    <span class="text-slate-400 block text-[10px]">Peak VRAM</span>
+                                    <strong id="vramTrackB" class="text-amber-400 text-sm">4,120 MB</strong>
+                                    <span class="text-[9px] text-slate-500 block">3 Models In RAM</span>
+                                </div>
+                                <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-800 text-center">
+                                    <span class="text-slate-400 block text-[10px]">Pose Articulation</span>
+                                    <strong id="poseStatusB" class="text-emerald-400 text-[11px] block truncate">Articulated (0.450)</strong>
+                                    <span class="text-[9px] text-slate-500 block">Top-Down Crop</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Qualitative Takeaway Box -->
+                    <div class="px-5 py-3 bg-emerald-950/20 border-t border-emerald-900/30 text-xs text-emerald-300">
+                        <strong class="font-bold">Edge Advantage:</strong> SSDLite detects localized person bounds, crops the human body, and regresses limbs in relative coordinates, resolving knees, elbows, and wrists cleanly.
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- TAB 2: COMPREHENSIVE BENCHMARK MATRIX                         -->
+        <!-- ============================================================== -->
+        <section id="section-matrix" class="tab-section hidden space-y-6">
+            <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                    <h2 class="text-3xl font-extrabold text-white tracking-tight flex items-center space-x-2">
+                        <i data-lucide="table" class="w-7 h-7 text-cyan-400"></i>
+                        <span>Empirical Benchmark Matrix</span>
+                    </h2>
+                    <p class="text-slate-400 text-sm mt-1">
+                        Full quantitative benchmark across geometry, natural language, and edge execution profiles.
+                    </p>
+                </div>
+            </div>
+
+            <div class="glass-panel rounded-2xl overflow-hidden border border-slate-800 shadow-2xl">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-900/90 text-xs font-mono text-slate-300 border-b border-slate-800 uppercase tracking-wider">
+                                <th class="p-4 sm:p-5">Modality / Task</th>
+                                <th class="p-4 sm:p-5">Metric</th>
+                                <th class="p-4 sm:p-5 text-rose-400">Track A (Monolithic)</th>
+                                <th class="p-4 sm:p-5 text-emerald-400">Track B (Modular Pipeline)</th>
+                                <th class="p-4 sm:p-5">Capacity Penalty</th>
+                                <th class="p-4 sm:p-5">Underlying Failure / Advantage Mechanism</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800/60 text-sm font-sans">
+                            <tr class="hover:bg-slate-850/50 transition-colors">
+                                <td class="p-4 sm:p-5 font-bold text-white flex items-center space-x-2">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-blue-400"></span>
+                                    <span>Spatial Detection</span>
+                                </td>
+                                <td class="p-4 sm:p-5 font-mono text-slate-300">mAP @ 0.50:0.95</td>
+                                <td class="p-4 sm:p-5 font-mono font-bold text-rose-400 bg-rose-500/5">0.037 (3.7%)</td>
+                                <td class="p-4 sm:p-5 font-mono font-bold text-emerald-400 bg-emerald-500/5">0.220 (22.0%)</td>
+                                <td class="p-4 sm:p-5 font-mono font-bold text-rose-400">-83.1%</td>
+                                <td class="p-4 sm:p-5 text-xs text-slate-400">
+                                    Track A outputs 1 box from global pooled vector; Track B uses multi-scale anchor pyramids with NMS.
+                                </td>
+                            </tr>
+                            <tr class="hover:bg-slate-850/50 transition-colors">
+                                <td class="p-4 sm:p-5 font-bold text-white flex items-center space-x-2">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-rose-400"></span>
+                                    <span>Skeletal Pose</span>
+                                </td>
+                                <td class="p-4 sm:p-5 font-mono text-slate-300">OKS AP @ 0.50:0.95</td>
+                                <td class="p-4 sm:p-5 font-mono font-bold text-rose-400 bg-rose-500/5">0.001 (0.1%)</td>
+                                <td class="p-4 sm:p-5 font-mono font-bold text-emerald-400 bg-emerald-500/5">0.450 (45.0%)</td>
+                                <td class="p-4 sm:p-5 font-mono font-bold text-rose-400">-99.7%</td>
+                                <td class="p-4 sm:p-5 text-xs text-slate-400">
+                                    AdaptiveAvgPool2d(1) erases 2D spatial maps; Track B uses top-down localized crop attention.
+                                </td>
+                            </tr>
+                            <tr class="hover:bg-slate-850/50 transition-colors">
+                                <td class="p-4 sm:p-5 font-bold text-white flex items-center space-x-2">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-purple-400"></span>
+                                    <span>Semantic Specificity</span>
+                                </td>
+                                <td class="p-4 sm:p-5 font-mono text-slate-300">CIDEr Score</td>
+                                <td class="p-4 sm:p-5 font-mono font-bold text-rose-400 bg-rose-500/5">0.462</td>
+                                <td class="p-4 sm:p-5 font-mono font-bold text-emerald-400 bg-emerald-500/5">0.765</td>
+                                <td class="p-4 sm:p-5 font-mono font-bold text-rose-400">-39.6%</td>
+                                <td class="p-4 sm:p-5 text-xs text-slate-400">
+                                    End-to-end backbone fine-tuning thrashing degrades ImageNet visual tokens; Track B freezes backbone.
+                                </td>
+                            </tr>
+                            <tr class="hover:bg-slate-850/50 transition-colors">
+                                <td class="p-4 sm:p-5 font-bold text-white flex items-center space-x-2">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+                                    <span>Syntactic Grammar</span>
+                                </td>
+                                <td class="p-4 sm:p-5 font-mono text-slate-300">BLEU-4 Score</td>
+                                <td class="p-4 sm:p-5 font-mono font-bold text-rose-400 bg-rose-500/5">0.186</td>
+                                <td class="p-4 sm:p-5 font-mono font-bold text-emerald-400 bg-emerald-500/5">0.242</td>
+                                <td class="p-4 sm:p-5 font-mono font-bold text-rose-400">-23.1%</td>
+                                <td class="p-4 sm:p-5 text-xs text-slate-400">
+                                    Autoregressive LSTM syntax decoding remains robust to visual noise.
+                                </td>
+                            </tr>
+                            <tr class="hover:bg-slate-850/50 transition-colors bg-slate-900/40">
+                                <td class="p-4 sm:p-5 font-bold text-white flex items-center space-x-2">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                                    <span>Inference Latency</span>
+                                </td>
+                                <td class="p-4 sm:p-5 font-mono text-slate-300">Execution Speed (ms)</td>
+                                <td class="p-4 sm:p-5 font-mono font-bold text-emerald-400 bg-emerald-500/5">12.4 ms</td>
+                                <td class="p-4 sm:p-5 font-mono font-bold text-rose-400 bg-rose-500/5">48.7 ms</td>
+                                <td class="p-4 sm:p-5 font-mono font-bold text-emerald-400">+74.5% Faster</td>
+                                <td class="p-4 sm:p-5 text-xs text-slate-400">
+                                    Track A executes 1 unified forward pass; Track B executes 3 sequential models.
+                                </td>
+                            </tr>
+                            <tr class="hover:bg-slate-850/50 transition-colors bg-slate-900/40">
+                                <td class="p-4 sm:p-5 font-bold text-white flex items-center space-x-2">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
+                                    <span>Memory Footprint</span>
+                                </td>
+                                <td class="p-4 sm:p-5 font-mono text-slate-300">Peak VRAM Allocated</td>
+                                <td class="p-4 sm:p-5 font-mono font-bold text-emerald-400 bg-emerald-500/5">1.84 GB</td>
+                                <td class="p-4 sm:p-5 font-mono font-bold text-rose-400 bg-rose-500/5">4.12 GB</td>
+                                <td class="p-4 sm:p-5 font-mono font-bold text-emerald-400">-55.3% VRAM</td>
+                                <td class="p-4 sm:p-5 text-xs text-slate-400">
+                                    Track A shares memory buffers; Track B maintains weights for 3 decoupled networks.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- TAB 3: INTERACTIVE CHARTS & ANALYTICS                          -->
+        <!-- ============================================================== -->
+        <section id="section-charts" class="tab-section hidden space-y-8">
+            <div>
+                <h2 class="text-3xl font-extrabold text-white tracking-tight flex items-center space-x-2">
+                    <i data-lucide="bar-chart-2" class="w-7 h-7 text-emerald-400"></i>
+                    <span>Quantitative Visualizations & Convergence Dynamics</span>
+                </h2>
+                <p class="text-slate-400 text-sm mt-1">
+                    Normalized accuracy benchmark comparisons, radar multi-modal trade-offs, and multi-task loss trajectories.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Accuracy Bar Chart -->
+                <div class="glass-panel p-6 rounded-2xl border border-slate-800">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-base font-bold text-white">Normalized Accuracy Benchmark (%)</h3>
+                        <span class="text-xs font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded">Higher is better</span>
+                    </div>
+                    <div class="h-72">
+                        <canvas id="accuracyChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Capability Radar Profile -->
+                <div class="glass-panel p-6 rounded-2xl border border-slate-800">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-base font-bold text-white">Multi-Modal Capability Profile (Radar)</h3>
+                        <span class="text-xs font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded">Holistic Trade-off</span>
+                    </div>
+                    <div class="h-72">
+                        <canvas id="radarChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Loss Convergence Trajectory (20 Epochs) -->
+                <div class="glass-panel p-6 rounded-2xl border border-slate-800 lg:col-span-2">
+                    <div class="flex justify-between items-center mb-4">
+                        <div>
+                            <h3 class="text-base font-bold text-white">Track A Multi-Task Training Convergence Logs (Epoch 1 &rarr; 20)</h3>
+                            <p class="text-xs text-slate-400">Telemetry parsed from `mono_metrics.csv` during RTX 5050 execution.</p>
+                        </div>
+                    </div>
+                    <div class="h-80">
+                        <canvas id="lossChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Edge Latency & VRAM Tradeoff -->
+                <div class="glass-panel p-6 rounded-2xl border border-slate-800 lg:col-span-2">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-base font-bold text-white">Edge Efficiency Trade-off: Latency vs VRAM</h3>
+                        <span class="text-xs font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded">Lower is better</span>
+                    </div>
+                    <div class="h-64">
+                        <canvas id="tradeoffChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- TAB 4: ARCHITECTURAL DISSECTION (THE ROOT CAUSES)              -->
+        <!-- ============================================================== -->
+        <section id="section-dissection" class="tab-section hidden space-y-8">
+            <div>
+                <h2 class="text-3xl font-extrabold text-white tracking-tight flex items-center space-x-2">
+                    <i data-lucide="binary" class="w-7 h-7 text-purple-400"></i>
+                    <span>Architectural Dissection: Where Did Track A Fall Short?</span>
+                </h2>
+                <p class="text-slate-400 text-sm mt-1">
+                    Mathematical and methodological breakdown of the multi-task capacity collapse.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Point 1 -->
+                <div class="glass-panel p-6 rounded-2xl border border-slate-800 space-y-3">
+                    <span class="text-xs font-mono font-bold text-rose-400 bg-rose-500/10 px-2.5 py-1 rounded">01. Spatial Vector Trap</span>
+                    <h3 class="text-lg font-bold text-white">Global Pooling Erases 2D Geometry</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        In `hydra/model_mono.py`, the shared backbone applies `nn.AdaptiveAvgPool2d(1)` to the 960-channel feature map, collapsing spatial resolution ($8 \times 8$) into a single 1D vector of 960 numbers. Spatial coordinates are averaged out. Expecting a dense linear regressor to reconstruct 17 precise $(x, y)$ joint locations across the canvas from a non-spatial summary is mathematically underdetermined, causing joints to collapse around the centroid of mass ($OKS \approx 0.001$).
+                    </p>
+                </div>
+
+                <!-- Point 2 -->
+                <div class="glass-panel p-6 rounded-2xl border border-slate-800 space-y-3">
+                    <span class="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded">02. Cropping Discrepancy</span>
+                    <h3 class="text-lg font-bold text-white">Top-Down Crop vs. Cluttered Canvas Guessing</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        Track B evaluated pose using <strong>Oracle Ground-Truth Cropping</strong>: each human was pre-cropped, centered, and scaled to $256 \times 256$, simplifying the task to local limb localization.
+                        Conversely, Track A was forced to detect, isolate, and locate joints across the entire cluttered $256 \times 256$ full-image canvas without spatial attention or localized cropping.
+                    </p>
+                </div>
+
+                <!-- Point 3 -->
+                <div class="glass-panel p-6 rounded-2xl border border-slate-800 space-y-3">
+                    <span class="text-xs font-mono font-bold text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded">03. Gradient Competition</span>
+                    <h3 class="text-lg font-bold text-white">Cross-Entropy Norm Domination</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        Cross-Entropy loss across a 10,192-word vocabulary naturally produces high scalar values ($\approx 9.16$ at initialization), generating massive gradient norms. A static weighting formula $(50 \times \text{Box}) + (50 \times \text{Pose}) + (1 \times \text{Cap})$ balances early epochs, but fails as tasks converge at non-linear rates. Dynamic projection (PCGrad / GradNorm) is needed.
+                    </p>
+                </div>
+
+                <!-- Point 4 -->
+                <div class="glass-panel p-6 rounded-2xl border border-slate-800 space-y-3">
+                    <span class="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded">04. Backbone Fine-Tuning</span>
+                    <h3 class="text-lg font-bold text-white">Backbone Freezing vs. End-to-End Thrashing</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        Track B captioning kept the MobileNetV3 backbone frozen with ImageNet pre-trained weights, preserving visual token separation.
+                        Track A updated the entire backbone simultaneously at $lr=0.001$ under 3 contradictory objectives, degrading pre-trained feature discriminability.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- TAB 5: ACADEMIC METRICS ENCYCLOPEDIA                           -->
+        <!-- ============================================================== -->
+        <section id="section-metrics" class="tab-section hidden space-y-6">
+            <div>
+                <h2 class="text-3xl font-extrabold text-white tracking-tight flex items-center space-x-2">
+                    <i data-lucide="book-open" class="w-7 h-7 text-amber-400"></i>
+                    <span>Academic Metrics Encyclopedia</span>
+                </h2>
+                <p class="text-slate-400 text-sm mt-1">
+                    Formal mathematical formulas, interpretation rules, and failure signatures.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- mAP Card -->
+                <div class="glass-panel p-6 rounded-2xl border border-slate-800 space-y-3 border-l-4 border-l-blue-500">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-base font-bold text-blue-400">mAP @ 0.50:0.95 (Mean Average Precision)</h3>
+                        <span class="text-xs font-mono bg-blue-500/10 text-blue-300 px-2 py-0.5 rounded">Detection</span>
+                    </div>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        Averages the area under the Precision-Recall curve across 10 IoU overlap thresholds ($0.50, 0.55, \dots, 0.95$). Evaluates localization accuracy and multi-instance recall across varied bounding box sizes.
+                    </p>
+                    <div class="bg-slate-900/80 p-3 rounded text-xs font-mono text-slate-300">
+                        $$\text{mAP} = \frac{1}{|T|} \sum_{t \in T} \int_{0}^{1} p_t(r) \, dr$$
+                    </div>
+                </div>
+
+                <!-- OKS Card -->
+                <div class="glass-panel p-6 rounded-2xl border border-slate-800 space-y-3 border-l-4 border-l-rose-500">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-base font-bold text-rose-400">OKS AP (Object Keypoint Similarity)</h3>
+                        <span class="text-xs font-mono bg-rose-500/10 text-rose-300 px-2 py-0.5 rounded">Pose</span>
+                    </div>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        Measures Euclidean distance between predicted and ground-truth keypoints normalized by subject scale ($s$) and joint variance ($\sigma_i$). Scale normalization prevents large humans from dominating error penalties.
+                    </p>
+                    <div class="bg-slate-900/80 p-3 rounded text-xs font-mono text-slate-300">
+                        $$\text{OKS} = \frac{\sum_i \exp\left(-\frac{d_i^2}{2 s^2 \sigma_i^2}\right) \delta(v_i > 0)}{\sum_i \delta(v_i > 0)}$$
+                    </div>
+                </div>
+
+                <!-- CIDEr Card -->
+                <div class="glass-panel p-6 rounded-2xl border border-slate-800 space-y-3 border-l-4 border-l-purple-500">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-base font-bold text-purple-400">CIDEr (Consensus-based Image Description)</h3>
+                        <span class="text-xs font-mono bg-purple-500/10 text-purple-300 px-2 py-0.5 rounded">Semantics</span>
+                    </div>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        Measures human consensus using Term Frequency-Inverse Document Frequency (TF-IDF). Rewards rare, specific descriptive words and ignores filler stop words ("a", "the", "is").
+                    </p>
+                    <div class="bg-slate-900/80 p-3 rounded text-xs font-mono text-slate-300">
+                        $$\text{CIDEr}_n(c_i, S_i) = \frac{1}{m} \sum_{j} \frac{g^n(c_i) \cdot g^n(s_{ij})}{\|g^n(c_i)\| \|g^n(s_{ij})\|}$$
+                    </div>
+                </div>
+
+                <!-- BLEU-4 Card -->
+                <div class="glass-panel p-6 rounded-2xl border border-slate-800 space-y-3 border-l-4 border-l-emerald-500">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-base font-bold text-emerald-400">BLEU-4 (Bilingual Evaluation Understudy)</h3>
+                        <span class="text-xs font-mono bg-emerald-500/10 text-emerald-300 px-2 py-0.5 rounded">Grammar</span>
+                    </div>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        Counts exact matches of 4-word n-gram sequences against reference captions with brevity penalty ($BP$) to ensure syntax and grammatical fluency are maintained.
+                    </p>
+                    <div class="bg-slate-900/80 p-3 rounded text-xs font-mono text-slate-300">
+                        $$\text{BLEU-4} = BP \cdot \exp\left(\sum_{n=1}^{4} w_n \log p_n\right)$$
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- TAB 6: EDGE HARDWARE & TELEMETRY PROFILE                       -->
+        <!-- ============================================================== -->
+        <section id="section-telemetry" class="tab-section hidden space-y-6">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-4">
+                <div>
+                    <h2 class="text-3xl font-extrabold text-white tracking-tight flex items-center space-x-2">
+                        <i data-lucide="gauge" class="w-7 h-7 text-cyan-400"></i>
+                        <span>Edge Hardware Execution Telemetry: RTX 5050 (8GB VRAM)</span>
+                    </h2>
+                    <p class="text-slate-400 text-sm mt-1">
+                        Empirical telemetry captured at 10-second intervals via NVIDIA Management Library (NVML).
+                    </p>
+                </div>
+                <div class="text-xs font-mono text-slate-400">
+                    Driver: 572.70 • CUDA 12.8 • NVML 13.0
+                </div>
+            </div>
+
+            <!-- Historical Run Aggregates -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div class="glass-panel p-5 rounded-2xl border border-slate-800">
+                    <span class="text-slate-400 text-xs block mb-1">Peak VRAM Allocated</span>
+                    <span class="text-2xl font-mono font-bold text-white">8,087.8 MB</span>
+                    <span class="text-xs text-rose-400 block mt-1">98.7% Hardware Ceiling</span>
+                </div>
+                <div class="glass-panel p-5 rounded-2xl border border-slate-800">
+                    <span class="text-slate-400 text-xs block mb-1">Average GPU Power</span>
+                    <span class="text-2xl font-mono font-bold text-white">24.8 W</span>
+                    <span class="text-xs text-slate-400 block mt-1">Peak: 84.5 Watts</span>
+                </div>
+                <div class="glass-panel p-5 rounded-2xl border border-slate-800">
+                    <span class="text-slate-400 text-xs block mb-1">Mean Temperature</span>
+                    <span class="text-2xl font-mono font-bold text-white">52.9 °C</span>
+                    <span class="text-xs text-emerald-400 block mt-1">Thermal Peak: 67.0 °C</span>
+                </div>
+                <div class="glass-panel p-5 rounded-2xl border border-slate-800">
+                    <span class="text-slate-400 text-xs block mb-1">Estimated Energy</span>
+                    <span class="text-2xl font-mono font-bold text-white">1,475 Wh</span>
+                    <span class="text-xs text-purple-400 block mt-1">~0.165 J / sample</span>
+                </div>
+                <!-- Advanced Edge Telemetries -->
+                <div class="glass-panel p-5 rounded-2xl border border-slate-800">
+                    <span class="text-slate-400 text-xs block mb-1">Mem Controller vs Core Util</span>
+                    <span class="text-2xl font-mono font-bold text-amber-400">74% / 32%</span>
+                    <span class="text-xs text-slate-400 block mt-1">Memory Bandwidth Bound</span>
+                </div>
+                <div class="glass-panel p-5 rounded-2xl border border-slate-800">
+                    <span class="text-slate-400 text-xs block mb-1">Peak PCIe Bandwidth</span>
+                    <span class="text-2xl font-mono font-bold text-cyan-400">4,180 MB/s</span>
+                    <span class="text-xs text-slate-400 block mt-1">Host-to-Device TX/RX</span>
+                </div>
+                <div class="glass-panel p-5 rounded-2xl border border-slate-800">
+                    <span class="text-slate-400 text-xs block mb-1">Throttle Bitmask State</span>
+                    <span class="text-2xl font-mono font-bold text-emerald-400" id="histThrottle">SwPowerCap</span>
+                    <span class="text-xs text-emerald-300 block mt-1">Zero Thermal Throttle</span>
+                </div>
+                <div class="glass-panel p-5 rounded-2xl border border-slate-800">
+                    <span class="text-slate-400 text-xs block mb-1">Battery Fail-Safe Guard</span>
+                    <span class="text-2xl font-mono font-bold text-rose-400">40.0% Floor</span>
+                    <span class="text-xs text-slate-400 block mt-1">Auto-Pause on DC Lost</span>
+                </div>
+            </div>
+
+            <!-- Real-Time Live Hardware Monitor -->
+            <div class="glass-panel p-6 rounded-2xl border border-slate-800 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-base font-bold text-white flex items-center space-x-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span>Live Host Telemetry (Live Poller)</span>
+                    </h3>
+                    <span class="text-xs font-mono text-slate-400" id="livePollingStatus">Polling /api/status...</span>
+                </div>
+                
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-mono">
+                    <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                        <span class="text-slate-400 block text-[10px]">GPU Compute & Mem Util</span>
+                        <div class="flex items-baseline space-x-2 mt-1">
+                            <strong id="liveGpuUtil" class="text-cyan-400 text-lg">--%</strong>
+                            <span class="text-slate-400 text-xs">/</span>
+                            <strong id="liveMemUtil" class="text-amber-400 text-lg">--%</strong>
+                        </div>
+                        <span class="text-[9px] text-slate-500 block">Core / Mem Controller</span>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                        <span class="text-slate-400 block text-[10px]">GPU Temp & Power</span>
+                        <div class="flex items-baseline space-x-2 mt-1">
+                            <strong id="liveGpuTemp" class="text-emerald-400 text-lg">-- °C</strong>
+                            <span class="text-slate-400 text-xs">/</span>
+                            <strong id="liveGpuPower" class="text-purple-400 text-lg">-- W</strong>
+                        </div>
+                        <span class="text-[9px] text-slate-500 block">Current Draw</span>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                        <span class="text-slate-400 block text-[10px]">PCIe Throughput & Clocks</span>
+                        <div class="flex items-baseline space-x-2 mt-1">
+                            <strong id="livePcie" class="text-blue-400 text-sm">-- KB/s</strong>
+                        </div>
+                        <span id="liveClock" class="text-[10px] text-slate-400 block">Clock: -- MHz</span>
+                    </div>
+
+                    <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                        <span class="text-slate-400 block text-[10px]">Throttle Bitmask & Power</span>
+                        <strong id="liveThrottle" class="text-emerald-400 text-sm block mt-1 truncate">None</strong>
+                        <span id="liveBattery" class="text-[10px] text-slate-400 block">AC: Plugged</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="text-center text-xs text-slate-500 py-10 border-t border-slate-800/80 space-y-1">
+        <p>The Capacity Bottleneck: Monolithic vs. Modular Multi-Task Learning on Edge Hardware</p>
+        <p class="font-mono">Author: Garnavya Rawal (Meridian Dynamics / University of Lucknow)</p>
+    </footer>
+
+    <!-- SCRIPTS -->
+    <script src="js/canvas.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>

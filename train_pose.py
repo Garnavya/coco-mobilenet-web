@@ -83,22 +83,28 @@ def collate_fn(batch):
 
 # 3. MASKED LOSS FUNCTION
 def masked_keypoint_loss(preds, targets):
-    """Calculates Mean Squared Error only on visible keypoints."""
+    """Calculates Mean Squared Error on visible coordinates AND Binary Cross-Entropy on visibility flags."""
     preds = preds.view(-1, 17, 3)
     targets = targets.view(-1, 17, 3)
     
-    # Check visibility flag (targets > 0)
+    # Check visibility flag (targets[:, :, 2] > 0 means annotated)
     mask = targets[:, :, 2] > 0
     
-    # We only care about training X and Y coordinates (indices 0 and 1)
+    # 1. Coordinate regression loss only on labeled joints
     pred_xy = preds[:, :, :2]
     target_xy = targets[:, :, :2]
     
-    # Calculate MSE loss only where the keypoint actually exists
-    if mask.sum() == 0:
-        return torch.tensor(0.0, device=preds.device, requires_grad=True)
+    if mask.sum() > 0:
+        loss_xy = nn.functional.mse_loss(pred_xy[mask], target_xy[mask])
+    else:
+        loss_xy = torch.tensor(0.0, device=preds.device, requires_grad=True)
         
-    return nn.functional.mse_loss(pred_xy[mask], target_xy[mask])
+    # 2. Visibility prediction loss (ensures outputs[:, :, 2] learns joint confidence)
+    pred_v = preds[:, :, 2]
+    target_v = (targets[:, :, 2] > 0).float()
+    loss_v = nn.functional.binary_cross_entropy(pred_v, target_v)
+    
+    return loss_xy + 0.5 * loss_v
 
 # 4. TRAINING LOOP
 def run_training():
@@ -130,7 +136,10 @@ def run_training():
     
     start_timer = time.time()
     save_system_info(sys_info_path)
-    monitor = SystemMonitor(metrics_csv, config.MONITOR_INTERVAL_SECONDS, config.GPU_INDEX, pause_event, abort_event)
+    monitor = SystemMonitor(
+        metrics_csv, config.MONITOR_INTERVAL_SECONDS, config.GPU_INDEX, 
+        pause_event, abort_event, battery_abort_threshold=config.BATTERY_ABORT_THRESHOLD
+    )
     monitor.start()
 
     with open(train_metrics_csv, 'w', newline='') as f:
@@ -142,6 +151,8 @@ def run_training():
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         model = MobileNetV3Pose().to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=config.LEARNING_RATE)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.EPOCHS, eta_min=1e-5)
+        scaler = torch.cuda.amp.GradScaler(enabled=torch.cuda.is_available())
         
         best_loss = float('inf')
         epochs_without_improvement = 0
@@ -151,7 +162,9 @@ def run_training():
         
         train_loader = torch.utils.data.DataLoader(
             train_dataset, batch_size=config.BATCH_SIZE, shuffle=True, 
-            num_workers=0, collate_fn=collate_fn
+            num_workers=2 if torch.cuda.is_available() else 0, 
+            pin_memory=torch.cuda.is_available(),
+            collate_fn=collate_fn
         )
 
         for epoch in range(config.EPOCHS):
@@ -163,18 +176,28 @@ def run_training():
             for batch_idx, (images, targets) in enumerate(train_loader): 
                 if len(images) == 0: continue
                 
-                if abort_event.is_set(): break 
+                if pause_event.is_set():
+                    print("\n[WARNING] AC power lost. Pausing pose training...")
+                    while pause_event.is_set() and not abort_event.is_set():
+                        time.sleep(2)
+
+                if abort_event.is_set():
+                    print(f"\n[CRITICAL] Battery below {config.BATTERY_ABORT_THRESHOLD}%. Aborting pose training.")
+                    metadata["status"] = "interrupted_battery_low"
+                    break 
                 
                 # Stack tuples into single tensors and move to GPU
                 images = torch.stack(images).to(device)
                 targets = torch.stack(targets).to(device)
 
-                outputs = model(images)
-                loss = masked_keypoint_loss(outputs, targets)
-
                 optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+                with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
+                    outputs = model(images)
+                    loss = masked_keypoint_loss(outputs, targets)
+
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
                 
                 epoch_loss += loss.item()
                 
@@ -182,7 +205,7 @@ def run_training():
                 bar_len = 30
                 filled_len = int(bar_len * current / total_batches)
                 bar = '█' * filled_len + '-' * (bar_len - filled_len)
-                print(f"\rEpoch {epoch+1} [{bar}] {current}/{total_batches} | MSE Loss: {loss.item():.4f}", end="", flush=True)
+                print(f"\rEpoch {epoch+1} [{bar}] {current}/{total_batches} | Loss: {loss.item():.4f}", end="", flush=True)
 
                 if DRY_RUN and batch_idx == 1:
                     print(f"\n[DRY RUN SUCCESS] Peak VRAM: {torch.cuda.max_memory_allocated(device) / (1024**2):.2f} MB")
@@ -193,6 +216,7 @@ def run_training():
 
             avg_loss = epoch_loss / total_batches
             epoch_dur = round(time.time() - epoch_start, 2)
+            scheduler.step()
             
             if avg_loss < best_loss:
                 best_loss = avg_loss

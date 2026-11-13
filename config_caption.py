@@ -17,6 +17,7 @@ class CaptionConfig:
     
     # Hardware
     GPU_INDEX: int = 0
+    BATTERY_ABORT_THRESHOLD: int = 40
     
     # Caption Experiment Info
     MODEL_NAME: str = "MobileNetV3-Caption"

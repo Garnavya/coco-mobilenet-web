@@ -136,7 +136,10 @@ def run_training():
     
     start_timer = time.time()
     save_system_info(sys_info_path)
-    monitor = SystemMonitor(metrics_csv, config.MONITOR_INTERVAL_SECONDS, config.GPU_INDEX, pause_event, abort_event)
+    monitor = SystemMonitor(
+        metrics_csv, config.MONITOR_INTERVAL_SECONDS, config.GPU_INDEX, 
+        pause_event, abort_event, battery_abort_threshold=config.BATTERY_ABORT_THRESHOLD
+    )
     monitor.start()
 
     with open(train_metrics_csv, 'w', newline='') as f:
@@ -154,10 +157,17 @@ def run_training():
         
         params = list(encoder.linear.parameters()) + list(encoder.bn.parameters()) + list(decoder.parameters())
         optimizer = torch.optim.Adam(params, lr=config.LEARNING_RATE)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.EPOCHS, eta_min=1e-5)
+        scaler = torch.cuda.amp.GradScaler(enabled=torch.cuda.is_available())
         
         print(f"[INFO] Loading Caption Dataset...")
         train_dataset = CocoCaptionDataset(config.TRAIN_IMAGES_DIR, config.TRAIN_CAPTIONS_FILE, vocab_path)
-        train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.BATCH_SIZE, shuffle=True, num_workers=0, collate_fn=collate_fn)
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset, batch_size=config.BATCH_SIZE, shuffle=True, 
+            num_workers=2 if torch.cuda.is_available() else 0, 
+            pin_memory=torch.cuda.is_available(),
+            collate_fn=collate_fn
+        )
 
         best_loss = float('inf')
         epochs_without_improvement = 0
@@ -170,7 +180,15 @@ def run_training():
 
             total_batches = len(train_loader)
             for batch_idx, (images, captions) in enumerate(train_loader):
-                if abort_event.is_set(): break
+                if pause_event.is_set():
+                    print("\n[WARNING] AC power lost. Pausing caption training...")
+                    while pause_event.is_set() and not abort_event.is_set():
+                        time.sleep(2)
+
+                if abort_event.is_set():
+                    print(f"\n[CRITICAL] Battery below {config.BATTERY_ABORT_THRESHOLD}%. Aborting caption training.")
+                    metadata["status"] = "interrupted_battery_low"
+                    break
                 
                 images = images.to(device)
                 captions = captions.to(device)
@@ -178,15 +196,15 @@ def run_training():
                 # Target is the caption sequence predicting the NEXT word
                 targets = captions
                 
-                features = encoder(images)
-                outputs = decoder(features, captions)
-                
-                # Flatten the outputs and targets for CrossEntropy math
-                loss = criterion(outputs.view(-1, vocab_size), targets.reshape(-1))
-                
                 optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+                with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
+                    features = encoder(images)
+                    outputs = decoder(features, captions)
+                    loss = criterion(outputs.view(-1, vocab_size), targets.reshape(-1))
+                
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
                 
                 epoch_loss += loss.item()
                 current = batch_idx + 1
@@ -204,6 +222,7 @@ def run_training():
 
             avg_loss = epoch_loss / total_batches
             epoch_dur = round(time.time() - epoch_start, 2)
+            scheduler.step()
             
             if avg_loss < best_loss:
                 best_loss = avg_loss

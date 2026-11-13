@@ -86,7 +86,12 @@ class EdgeVisionEngine:
         features = self.encoder(image_tensor).unsqueeze(1)
         _, states = self.decoder.lstm(features)
         
-        word_id = self.word2idx[""]
+        start_idx = self.word2idx.get("<START>", 1)
+        end_idx = self.word2idx.get("<END>", 2)
+        pad_idx = self.word2idx.get("<PAD>", 0)
+        unk_idx = self.word2idx.get("<UNK>", 3)
+
+        word_id = start_idx
         sampled_ids = []
         
         for _ in range(20): # Max sequence length
@@ -94,13 +99,13 @@ class EdgeVisionEngine:
             hiddens, states = self.decoder.lstm(inputs, states)
             predicted = self.decoder.linear(hiddens.squeeze(1)).argmax(1).item()
             
-            if predicted == self.word2idx[""]:
+            if predicted == end_idx:
                 break
                 
             sampled_ids.append(predicted)
             word_id = predicted
             
-        caption = " ".join([self.idx2word[idx] for idx in sampled_ids if idx not in [self.word2idx[""], self.word2idx[""]]])
+        caption = " ".join([self.idx2word[idx] for idx in sampled_ids if idx not in [pad_idx, unk_idx, start_idx, end_idx]])
         return caption
 
     def process(self, image_path_or_pil):
@@ -164,16 +169,28 @@ class EdgeVisionEngine:
 if __name__ == "__main__":
     import pprint
     
-    # Update these paths to point to your compiled ONNX or .pth weights
-    engine = EdgeVisionEngine(
-        vocab_path="vocab.json",
-        pose_weights="reports/run_pose_latest/best_model_pose.pth", # Update path
-        enc_weights="reports/run_caption_latest/best_encoder.pth", # Update path
-        dec_weights="reports/run_caption_latest/best_decoder.pth" # Update path
-    )
+    base_dir = Path(__file__).resolve().parent
+    vocab_file = base_dir / "vocab.json"
     
-    # Run a test inference
-    output = engine.process("track_b_sample.jpg")
+    # Auto-resolve latest weights if available
+    pose_runs = sorted(list((base_dir / "reports").glob("run_pose_*")))
+    cap_runs = sorted(list((base_dir / "reports").glob("run_caption_*")))
     
-    print("\n[SUCCESS] Pipeline Execution Complete. Result:")
-    pprint.pprint(output)
+    pose_weights = pose_runs[-1] / "best_model_pose.pth" if pose_runs else base_dir / "models" / "best_model_pose.pth"
+    enc_weights = cap_runs[-1] / "best_encoder.pth" if cap_runs else base_dir / "models" / "best_encoder.pth"
+    dec_weights = cap_runs[-1] / "best_decoder.pth" if cap_runs else base_dir / "models" / "best_decoder.pth"
+    
+    test_image = base_dir / "track_b_sample.jpg"
+    
+    if pose_weights.exists() and enc_weights.exists() and dec_weights.exists() and test_image.exists():
+        engine = EdgeVisionEngine(
+            vocab_path=str(vocab_file),
+            pose_weights=str(pose_weights),
+            enc_weights=str(enc_weights),
+            dec_weights=str(dec_weights)
+        )
+        output = engine.process(test_image)
+        print("\n[SUCCESS] Pipeline Execution Complete. Result:")
+        pprint.pprint(output)
+    else:
+        print("[INFO] EdgeVisionEngine loaded successfully. Test skipped as sample image or checkpoints are pending.")

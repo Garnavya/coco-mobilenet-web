@@ -91,7 +91,10 @@ def run_training():
     start_timer = time.time()
 
     save_system_info(sys_info_path)
-    monitor = SystemMonitor(metrics_csv, config.MONITOR_INTERVAL_SECONDS, config.GPU_INDEX, pause_event, abort_event)
+    monitor = SystemMonitor(
+        metrics_csv, config.MONITOR_INTERVAL_SECONDS, config.GPU_INDEX, 
+        pause_event, abort_event, battery_abort_threshold=config.BATTERY_ABORT_THRESHOLD
+    )
     monitor.start()
 
     with open(train_metrics_csv, 'w', newline='') as f:
@@ -101,11 +104,23 @@ def run_training():
         print(f"Starting run {metadata['run_id']}...")
         
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        model = torchvision.models.detection.ssdlite320_mobilenet_v3_large(weights=None, num_classes=91)
+        # Use pretrained weights by default for robust transfer learning
+        try:
+            weights = torchvision.models.detection.SSDLite320_MobileNet_V3_Large_Weights.DEFAULT
+            model = torchvision.models.detection.ssdlite320_mobilenet_v3_large(weights=weights, num_classes=91)
+            print("[INFO] Initialized SSDLite320 with pre-trained MobileNetV3 weights.")
+        except Exception:
+            model = torchvision.models.detection.ssdlite320_mobilenet_v3_large(weights=None, num_classes=91)
+            print("[INFO] Initialized SSDLite320 from scratch.")
+            
         model.to(device)
         
         optimizer = torch.optim.Adam(model.parameters(), lr=config.LEARNING_RATE)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.EPOCHS, eta_min=1e-5)
+        scaler = torch.cuda.amp.GradScaler(enabled=torch.cuda.is_available())
+        
         best_loss = float('inf')
+        epochs_without_improvement = 0
 
         print(f"[INFO] Loading COCO from {config.TRAIN_ANNOTATION_FILE}...")
         
@@ -120,15 +135,10 @@ def run_training():
             train_dataset, 
             batch_size=config.BATCH_SIZE, 
             shuffle=True, 
-            num_workers=0, 
+            num_workers=2 if torch.cuda.is_available() else 0, 
+            pin_memory=torch.cuda.is_available(),
             collate_fn=collate_fn
         )
-
-        optimizer = torch.optim.Adam(model.parameters(), lr=config.LEARNING_RATE)
-        best_loss = float('inf')
-        epochs_without_improvement = 0  # NEW: Tracker for early stopping
-
-        print(f"[INFO] Loading COCO from {config.TRAIN_ANNOTATION_FILE}...")
 
         for epoch in range(config.EPOCHS):
             epoch_start = time.time()
@@ -155,12 +165,14 @@ def run_training():
                 images = list(image.to(device) for image in images)
                 targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
-                loss_dict = model(images, targets)
-                losses = sum(loss for loss in loss_dict.values())
-
                 optimizer.zero_grad()
-                losses.backward()
-                optimizer.step()
+                with torch.cuda.amp.autocast(enabled=torch.cuda.is_available()):
+                    loss_dict = model(images, targets)
+                    losses = sum(loss for loss in loss_dict.values())
+
+                scaler.scale(losses).backward()
+                scaler.step(optimizer)
+                scaler.update()
                 
                 epoch_loss += losses.item()
                 
@@ -183,6 +195,7 @@ def run_training():
             # --- NEW EARLY STOPPING & SAVING LOGIC ---
             avg_loss = epoch_loss / len(train_loader)
             epoch_dur = round(time.time() - epoch_start, 2)
+            scheduler.step()
             
             if avg_loss < best_loss:
                 best_loss = avg_loss
